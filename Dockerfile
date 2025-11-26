@@ -1,6 +1,6 @@
 # Estágio 1: Compilação
 # Usamos uma imagem oficial do Go para compilar nossa aplicação.
-FROM golang:1.21-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # Define o diretório de trabalho dentro do contêiner
 WORKDIR /app
