@@ -14,7 +14,7 @@ import (
 	"golang.org/x/text/message"
 )
 
-// Estruturas para decodificar o JSON da API da Caixa
+// Estruturas para decodificar o JSON da API
 type RateioPremio struct {
 	DescricaoFaixa     string  `json:"descricaoFaixa"`
 	NumeroDeGanhadores int     `json:"numeroDeGanhadores"`
@@ -200,66 +200,73 @@ var tpl = template.Must(template.New("web").Funcs(funcMap).Parse(`
 </html>
 `))
 
-func getLatestContestNumber() (int, error) {
-	client := http.Client{
-		Timeout: 5 * time.Second,
+// fetchContestData busca os dados de um concurso, com fallback.
+// Se contestNumber for "", busca o último.
+func fetchContestData(contestNumber string) (LoteriaDados, error) {
+	var primaryURL, fallbackURL string
+
+	if contestNumber == "" {
+		primaryURL = "https://api.guidi.dev.br/loteria/megasena/ultimo"
+		fallbackURL = "https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena/"
+	} else {
+		primaryURL = "https://api.guidi.dev.br/loteria/megasena/" + contestNumber
+		fallbackURL = "https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena/" + contestNumber
 	}
-	resp, err := client.Get("https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena/")
+
+	client := http.Client{Timeout: 4 * time.Second}
+	var dados LoteriaDados
+
+	// Tenta a API primária
+	log.Printf("Tentando API primária: %s", primaryURL)
+	resp, err := client.Get(primaryURL)
+	if err == nil {
+		defer resp.Body.Close()
+		if err := json.NewDecoder(resp.Body).Decode(&dados); err == nil && dados.Numero != 0 {
+			log.Println("Sucesso na API primária.")
+			return dados, nil
+		}
+	}
+
+	// Se a primária falhar, tenta a de fallback
+	log.Printf("API primária falhou (erro: %v). Tentando API de fallback: %s", err, fallbackURL)
+	resp, err = client.Get(fallbackURL)
 	if err != nil {
-		return 0, fmt.Errorf("erro ao buscar o número do último concurso: %w", err)
+		return LoteriaDados{}, fmt.Errorf("ambas as APIs falharam. Erro final: %w", err)
 	}
 	defer resp.Body.Close()
 
-	var latestData LoteriaDados
-	if err := json.NewDecoder(resp.Body).Decode(&latestData); err != nil {
-		return 0, fmt.Errorf("erro ao decodificar dados do último concurso: %w", err)
+	if err := json.NewDecoder(resp.Body).Decode(&dados); err != nil || dados.Numero == 0 {
+		return LoteriaDados{}, fmt.Errorf("API de fallback também falhou ou retornou dados inválidos")
 	}
-	return latestData.Numero, nil
+
+	log.Println("Sucesso na API de fallback.")
+	return dados, nil
+}
+
+
+func getLatestContestNumber() (int, error) {
+	dados, err := fetchContestData("")
+	if err != nil {
+		return 0, fmt.Errorf("erro ao buscar o número do último concurso de ambas as APIs: %w", err)
+	}
+	return dados.Numero, nil
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	// Primeiro, obtemos o número do concurso mais recente
 	latestContestNum, err := getLatestContestNumber()
 	if err != nil {
-		log.Printf("Erro ao obter o número do último concurso: %v", err)
+		log.Printf("Erro crítico ao obter o número do último concurso: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		tpl.Execute(w, TemplateData{Erro: "Não foi possível obter o número do concurso mais recente."})
+		tpl.Execute(w, TemplateData{Erro: "Não foi possível obter o número do concurso mais recente de nenhuma das fontes."})
 		return
 	}
 
 	numeroStr := r.URL.Query().Get("concurso")
-	var url string
-	if numeroStr == "" {
-		url = "https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena/"
-	} else {
-		url = "https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena/" + numeroStr
-	}
-
-	client := http.Client{
-		Timeout: 5 * time.Second,
-	}
-	resp, err := client.Get(url)
+	
+	dados, err := fetchContestData(numeroStr)
 	if err != nil {
-		log.Printf("Erro ao fazer requisição para a API da Caixa: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		tpl.Execute(w, TemplateData{Erro: "Não foi possível conectar à API da Caixa."})
-		return
-	}
-	defer resp.Body.Close()
-
-	var dados LoteriaDados
-	if err := json.NewDecoder(resp.Body).Decode(&dados); err != nil {
-		log.Printf("Erro ao decodificar JSON: %v", err)
-		numero, _ := strconv.Atoi(numeroStr)
-		if numero > 0 {
-			numero--
-		}
-		tpl.Execute(w, TemplateData{Erro: fmt.Sprintf("Sorteio %s não encontrado ou inválido.", numeroStr), NumeroAtual: numero})
-		return
-	}
-
-	// Verifica se o concurso retornado é válido. Se não, mostra erro.
-	if dados.Numero == 0 {
+		log.Printf("Erro final ao obter dados do concurso '%s': %v", numeroStr, err)
 		numero, _ := strconv.Atoi(numeroStr)
 		if numero > 0 {
 			numero--
@@ -269,8 +276,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := TemplateData{
-		DadosLoteria:        dados,
-		MeusJogos:           meusJogos,
+		DadosLoteria:      dados,
+		MeusJogos:         meusJogos,
 		LatestContestNumber: latestContestNum,
 	}
 
