@@ -44,6 +44,7 @@ var meusJogos = [][]string{
 type TemplateData struct {
 	DadosLoteria      LoteriaDados
 	MeusJogos         [][]string
+	MyNumbersSet      map[string]bool
 	Erro              string
 	NumeroAtual       int
 	LatestContestNumber int
@@ -71,6 +72,9 @@ var funcMap = template.FuncMap{
 			}
 		}
 		return false
+	},
+	"isInSet": func(set map[string]bool, key string) bool {
+		return set[key]
 	},
 	"formatMoney": func(valor float64) string {
 		p := message.NewPrinter(language.BrazilianPortuguese)
@@ -109,6 +113,14 @@ var tpl = template.Must(template.New("web").Funcs(funcMap).Parse(`
         body { background-color: #f8f9fa; }
         .badge { font-size: 1.1rem; }
         .card { box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .dot {
+          height: 8px;
+          width: 8px;
+          background-color: #198754; /* Bootstrap's success green */
+          border-radius: 50%;
+          display: block; /* Use block to position it below */
+          margin: 4px auto 0; /* Center the dot */
+        }
     </style>
 </head>
 <body>
@@ -135,7 +147,14 @@ var tpl = template.Must(template.New("web").Funcs(funcMap).Parse(`
                     <h3 class="text-center mb-3">Números Sorteados</h3>
                     <div class="d-flex justify-content-center gap-2 flex-wrap">
                         {{range .DadosLoteria.ListaDezenas}}
-                        <span class="badge bg-success p-2 fs-5">{{.}}</span>
+                        <div class="text-center">
+                          <span class="badge bg-success p-2 fs-5">{{.}}</span>
+                          {{if isInSet $.MyNumbersSet .}}
+                            <span class="dot"></span>
+                          {{else}}
+                            <span class="dot" style="background-color: transparent;"></span>
+                          {{end}}
+                        </div>
                         {{end}}
                     </div>
                 </div>
@@ -275,9 +294,18 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Cria um "set" com todos os números apostados para checagem rápida
+	myNumbersSet := make(map[string]bool)
+	for _, jogo := range meusJogos {
+		for _, num := range jogo {
+			myNumbersSet[num] = true
+		}
+	}
+
 	data := TemplateData{
 		DadosLoteria:      dados,
 		MeusJogos:         meusJogos,
+		MyNumbersSet:      myNumbersSet,
 		LatestContestNumber: latestContestNum,
 	}
 
