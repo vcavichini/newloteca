@@ -1,4 +1,3 @@
-
 package main
 
 import (
@@ -7,6 +6,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -22,31 +22,43 @@ type RateioPremio struct {
 }
 
 type LoteriaDados struct {
-	Numero              int            `json:"numero"`
-	DataApuracao        string         `json:"dataApuracao"`
-	ListaDezenas        []string       `json:"listaDezenas"`
-	ListaRateioPremio   []RateioPremio `json:"listaRateioPremio"`
-	Acumulado           bool           `json:"acumulado"`
-	DataProximoConcurso *string        `json:"dataProximoConcurso"`
+	Numero               int            `json:"numero"`
+	DataApuracao         string         `json:"dataApuracao"`
+	ListaDezenas         []string       `json:"listaDezenas"`
+	ListaRateioPremio    []RateioPremio `json:"listaRateioPremio"`
+	Acumulado            bool           `json:"acumulado"`
+	DataProximoConcurso  *string        `json:"dataProximoConcurso"`
 	ValorEstimadoProximo float64        `json:"valorEstimadoProximoConcurso"`
 }
 
-// Meus jogos (hardcoded como no original)
-var meusJogos = [][]string{
-	{"03", "15", "18", "23", "40", "54"},
-	{"01", "02", "12", "29", "46", "51"},
-	{"04", "08", "22", "37", "41", "56"},
-	{"02", "04", "07", "14", "25", "33"},
-	{"04", "09", "13", "24", "30", "55"},
+// Estruturas para o arquivo de apostas
+type BetsConfig struct {
+	Permanent [][]string            `json:"permanent"`
+	OneOff    map[string][][]string `json:"one_off"`
+}
+
+// loadBets lê o arquivo bets.json e retorna a configuração
+func loadBets() (BetsConfig, error) {
+	file, err := os.Open("bets.json")
+	if err != nil {
+		return BetsConfig{}, err
+	}
+	defer file.Close()
+
+	var config BetsConfig
+	if err := json.NewDecoder(file).Decode(&config); err != nil {
+		return BetsConfig{}, err
+	}
+	return config, nil
 }
 
 // Dados para passar ao template HTML
 type TemplateData struct {
-	DadosLoteria      LoteriaDados
-	MeusJogos         [][]string
-	MyNumbersSet      map[string]bool
-	Erro              string
-	NumeroAtual       int
+	DadosLoteria        LoteriaDados
+	MeusJogos           [][]string
+	MyNumbersSet        map[string]bool
+	Erro                string
+	NumeroAtual         int
 	LatestContestNumber int
 }
 
@@ -262,7 +274,6 @@ func fetchContestData(contestNumber string) (LoteriaDados, error) {
 	return dados, nil
 }
 
-
 func getLatestContestNumber() (int, error) {
 	dados, err := fetchContestData("")
 	if err != nil {
@@ -282,7 +293,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	numeroStr := r.URL.Query().Get("concurso")
-	
+
 	dados, err := fetchContestData(numeroStr)
 	if err != nil {
 		log.Printf("Erro final ao obter dados do concurso '%s': %v", numeroStr, err)
@@ -294,18 +305,35 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Carrega as apostas do arquivo
+	betsConfig, err := loadBets()
+	if err != nil {
+		log.Printf("Erro ao carregar apostas: %v", err)
+		// Se falhar, podemos mostrar erro ou lista vazia. Vamos logar e seguir com lista vazia.
+	}
+
+	// Combina apostas permanentes com as do concurso atual
+	jogosExibidos := append([][]string{}, betsConfig.Permanent...) // Copia para não alterar o original se fosse global
+
+	// Verifica se há apostas específicas para este concurso
+	// O número do concurso vem como int em 'dados.Numero', precisamos converter para string para buscar no map
+	contestStr := strconv.Itoa(dados.Numero)
+	if extraBets, ok := betsConfig.OneOff[contestStr]; ok {
+		jogosExibidos = append(jogosExibidos, extraBets...)
+	}
+
 	// Cria um "set" com todos os números apostados para checagem rápida
 	myNumbersSet := make(map[string]bool)
-	for _, jogo := range meusJogos {
+	for _, jogo := range jogosExibidos {
 		for _, num := range jogo {
 			myNumbersSet[num] = true
 		}
 	}
 
 	data := TemplateData{
-		DadosLoteria:      dados,
-		MeusJogos:         meusJogos,
-		MyNumbersSet:      myNumbersSet,
+		DadosLoteria:        dados,
+		MeusJogos:           jogosExibidos,
+		MyNumbersSet:        myNumbersSet,
 		LatestContestNumber: latestContestNum,
 	}
 
