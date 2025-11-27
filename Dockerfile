@@ -26,6 +26,7 @@ WORKDIR /
 
 # Copia apenas o executável compilado do estágio anterior
 COPY --from=builder /newloteca /newloteca
+COPY --from=builder /app/bets.json /bets.json
 
 # Expõe a porta que nossa aplicação usa
 EXPOSE 8080
