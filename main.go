@@ -148,15 +148,15 @@ var tpl = template.Must(template.New("web").Funcs(funcMap).Parse(`
         {{else}}
         <div class="card">
             <div class="card-body">
-                <p class="text-center mb-2">
+                <h3 class="text-center mb-0">
                     <strong>Concurso:</strong> {{.DadosLoteria.Numero}}
-                </p>
-                <p class="text-center mb-4">
+                </h3>
+                <p class="text-center mb-3">
                     {{.DadosLoteria.DataApuracao}}
                 </p>
 
-                <div class="mb-4">
-                    <h3 class="text-center mb-3">Números Sorteados</h3>
+                <div class="mb-3">
+                    <h4 class="text-center mb-2">Números Sorteados</h4>
                     <div class="d-flex justify-content-center gap-2 flex-wrap">
                         {{range .DadosLoteria.ListaDezenas}}
                         <div class="text-center">
@@ -171,11 +171,11 @@ var tpl = template.Must(template.New("web").Funcs(funcMap).Parse(`
                     </div>
                 </div>
 
-                <div class="mt-4">
-                    <h3 class="text-center mb-3">Seus Jogos</h3>
+                <div class="mt-3">
+                    <h4 class="text-center mb-2">Seus Jogos</h4>
                     {{range .MeusJogos}}
                         {{$acertos := compareGames $.DadosLoteria.ListaDezenas .}}
-                        <div class="mb-3 p-2 rounded {{if ge $acertos 4}}bg-success bg-opacity-10{{end}}">
+                        <div class="mb-1 p-2 rounded {{if ge $acertos 4}}bg-success bg-opacity-10{{end}}">
                             <div class="d-flex justify-content-center gap-2 flex-wrap">
                                 {{range .}}
                                 <span class="badge p-2 fs-5 {{if isSorteado $.DadosLoteria.ListaDezenas .}}bg-success{{else}}text-dark bg-secondary bg-opacity-10{{end}}">
@@ -187,7 +187,7 @@ var tpl = template.Must(template.New("web").Funcs(funcMap).Parse(`
                     {{end}}
                 </div>
 
-                <div class="d-flex justify-content-center gap-3 mt-4">
+                <div class="d-flex justify-content-center gap-3 mt-2">
                     {{if gt .DadosLoteria.Numero 1}}
                     <a href="/?concurso={{.DadosLoteria.Numero | add -1}}" class="btn btn-primary">{{.DadosLoteria.Numero | add -1}}</a>
                     {{end}}
@@ -200,10 +200,10 @@ var tpl = template.Must(template.New("web").Funcs(funcMap).Parse(`
         </div>
 
         {{if .DadosLoteria.ListaRateioPremio}}
-        <div class="card mt-4">
+        <div class="card mt-3">
             <div class="card-body">
-                <h3 class="text-center mb-3">Distribuição de Prêmios</h3>
-                <table class="table table-striped table-hover">
+                <h4 class="text-center mb-2">Distribuição de Prêmios</h4>
+                <table class="table table-striped table-hover table-sm mb-0">
                     <thead class="table-dark">
                     <tr>
                         <th>Acertos</th>
