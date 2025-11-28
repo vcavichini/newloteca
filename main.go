@@ -248,12 +248,12 @@ func fetchContestData(contestNumber string) (LoteriaDados, error) {
 	var dados LoteriaDados
 
 	// Tenta a API primária
-	log.Printf("Tentando API primária: %s", primaryURL)
+	// log.Printf("Tentando API primária: %s", primaryURL)
 	resp, err := client.Get(primaryURL)
 	if err == nil {
 		defer resp.Body.Close()
 		if err := json.NewDecoder(resp.Body).Decode(&dados); err == nil && dados.Numero != 0 {
-			log.Println("Sucesso na API primária.")
+			// log.Println("Sucesso na API primária.")
 			return dados, nil
 		}
 	}
